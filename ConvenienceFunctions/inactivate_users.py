@@ -6,10 +6,13 @@ import omero
 import omero.clients
 from omero.gateway import BlitzGateway
 import getpass
+import sys
 
-username = str(input("Enter username:"))
+#username = str(input("Enter username:"))
+username = "root"
 password = getpass.getpass("Password:")
-host = str(input("Enter host IP:"))
+#host = str(input("Enter host IP:"))
+host = "localhost"
 conn = BlitzGateway(username, password, host=host, port=4064, secure=True)
 conn.connect()
 omero.client(host)
@@ -18,9 +21,15 @@ omero.client(host)
 ###############################################################
 admin = conn.getAdminService()
 
-graveyard_id = int(input("Enter the group ID for the inactive users:"))
-min_days = int(input("Enter the minimum amount of days a user must have been inactive:"))
+graveyard_id = 203
+min_days = 80
+spare_list = ("public", "guest", "root", "pwalczysko", "sbesson", "jburel", "jrswedlow", "kmohamed001", "wmoore", "dgault", "jamoore", "fwong", "mchangmai001")
+#graveyard_id = int(input("Enter the group ID for the inactive users:"))
+#min_days = int(input("Enter the minimum amount of days a user must have been inactive:"))
 
+#if not (graveyard_id == 14):
+#    print("exiting")
+#    sys.exit()
 
 def find_users(conn: BlitzGateway, minimum_days: int = 0) -> Dict[int, str]:
     # Determine which users' data to consider deleting.
@@ -33,8 +42,20 @@ def find_users(conn: BlitzGateway, minimum_days: int = 0) -> Dict[int, str]:
     ):
         user_id = result[0].val
         user_name = result[1].val
+        
+        # check if the user is a Group Owner and is a member of only Virtual Microscope group
+        exp = admin.getExperimenter(user_id)
+        groupOwner = admin.getLeaderOfGroupIds(exp)
+        groupMember = admin.getMemberOfGroupIds(exp)
+        if len(groupMember) == 2 and groupMember[0] == 3:
+            rightGroup = True
+        else:
+            rightGroup = False
+        #print (groupMember)
+        #print (rightGroup)
+
         # check for users you DO NOT want to touch
-        if user_name not in ("Public-User", "guest", "root"):
+        if user_name not in spare_list and len(groupOwner) == 0 and rightGroup:
             users[user_id] = user_name
 
     for result in conn.getQueryService().projection(
@@ -75,7 +96,6 @@ def find_users(conn: BlitzGateway, minimum_days: int = 0) -> Dict[int, str]:
         logouts[user_id] = user_logout
     return users
 
-
 def remove_user(user_id, graveyard_group_id, admin):
     # remove a user from all groups except the graveyard group
 
@@ -105,6 +125,11 @@ users_dict = find_users(conn, min_days)
 print(f"found these {len(users_dict)} users {users_dict}")
 print("______________________________________________\n______________________________________________")
 users = list(users_dict.keys())
+
+continue_id = str(input("Do you want to proceed?"))
+
+if not (continue_id == "Y"):
+    sys.exit()
 
 # loop through the users and remove them from the groups and add them to the graveyard group
 # and give some feedback who got removed from what
